@@ -212,13 +212,32 @@ export class YtDlpCli {
                 }
               }
 
-              // Track playlist progress
+              // Track playlist progress - multiple patterns for different yt-dlp versions
               const playlistMatch = line.match(
-                /Downloading item (\d+) of (\d+)/
+                /Downloading (?:item|video) (\d+) of (\d+)/
               );
               if (playlistMatch && playlistMatch[1] && playlistMatch[2]) {
-                lastProgress.currentVideo = parseInt(playlistMatch[1]);
-                lastProgress.totalVideos = parseInt(playlistMatch[2]);
+                const currentVideo = parseInt(playlistMatch[1]);
+                const totalVideos = parseInt(playlistMatch[2]);
+                lastProgress.currentVideo = currentVideo;
+                lastProgress.totalVideos = totalVideos;
+                if (onProgress) {
+                  onProgress(lastProgress);
+                }
+              }
+
+              // Also check for [download] N of M pattern
+              const playlistMatch2 = line.match(
+                /\[download\]\s+(\d+)\s+of\s+(\d+)/
+              );
+              if (playlistMatch2 && playlistMatch2[1] && playlistMatch2[2]) {
+                const currentVideo = parseInt(playlistMatch2[1]);
+                const totalVideos = parseInt(playlistMatch2[2]);
+                lastProgress.currentVideo = currentVideo;
+                lastProgress.totalVideos = totalVideos;
+                if (onProgress) {
+                  onProgress(lastProgress);
+                }
               }
             }
           }

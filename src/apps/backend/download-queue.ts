@@ -55,6 +55,13 @@ export class DownloadQueueManager {
           if (job.status === "downloading") {
             job.status = "pending";
           }
+          // Convert date strings back to Date objects
+          if (job.createdAt && typeof job.createdAt === "string") {
+            job.createdAt = new Date(job.createdAt);
+          }
+          if (job.completedAt && typeof job.completedAt === "string") {
+            job.completedAt = new Date(job.completedAt);
+          }
           this.jobs.set(job.id, job);
         });
 

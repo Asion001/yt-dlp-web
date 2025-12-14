@@ -42,10 +42,22 @@ export const websocketHandler = {
 
         case "queue-status":
           const jobs = downloadQueue.getAllJobs();
+          // Serialize jobs properly - convert dates to ISO strings explicitly
+          const serializedJobs = jobs.map((job) => ({
+            ...job,
+            createdAt:
+              job.createdAt instanceof Date
+                ? job.createdAt.toISOString()
+                : job.createdAt,
+            completedAt:
+              job.completedAt instanceof Date
+                ? job.completedAt.toISOString()
+                : job.completedAt,
+          }));
           ws.send(
             JSON.stringify({
               type: "queue-status",
-              payload: { jobs },
+              payload: { jobs: serializedJobs },
             })
           );
           break;

@@ -6,6 +6,7 @@ import type {
   FormatRecommendation 
 } from "@/types";
 import { useRef, useState, useEffect, type FormEvent } from "react";
+import toast from "react-hot-toast";
 import { Metadata } from "./Metadata";
 import { PlaylistItem } from "./PlaylistItem";
 
@@ -21,6 +22,7 @@ export function LinkFetch() {
   const [selectedPlaylistItems, setSelectedPlaylistItems] = useState<number[]>([]);
   const [playlistItemFormats, setPlaylistItemFormats] = useState<Record<number, string>>({});
   const [globalPlaylistFormat, setGlobalPlaylistFormat] = useState<string | undefined>(undefined);
+  const [showLogs, setShowLogs] = useState(false);
   const lastDownloadUrlRef = useRef<string>("");
 
 
@@ -68,6 +70,7 @@ export function LinkFetch() {
     switch (message.type) {
       case "download-started":
         console.log("Download started:", message.payload.jobId);
+        toast.success("Download started!");
         // Replace temp job with real job ID
         setDownloads((prev) => {
           const newMap = new Map(prev);
@@ -99,11 +102,22 @@ export function LinkFetch() {
           const jobId = message.payload.jobId;
           const existingJob = newMap.get(jobId);
           if (existingJob) {
-            newMap.set(jobId, {
+            const updatedJob = {
               ...existingJob,
               progress: { ...existingJob.progress, ...message.payload.progress },
               status: message.payload.status || existingJob.status,
-            });
+            };
+            
+            // Log detailed progress info
+            console.log(`[${jobId}] Status: ${updatedJob.status}, Progress: ${updatedJob.progress.percent.toFixed(1)}%${
+              updatedJob.progress.currentVideo && updatedJob.progress.totalVideos 
+                ? `, Video ${updatedJob.progress.currentVideo}/${updatedJob.progress.totalVideos}` 
+                : ''
+            }${updatedJob.progress.speed ? `, Speed: ${updatedJob.progress.speed}` : ''}${
+              updatedJob.progress.eta ? `, ETA: ${updatedJob.progress.eta}` : ''
+            }`);
+            
+            newMap.set(jobId, updatedJob);
           } else {
             // Create job if it doesn't exist (might have missed download-started)
             console.log("Creating missing job from progress update");
@@ -122,6 +136,7 @@ export function LinkFetch() {
         break;
 
       case "download-complete":
+        toast.success("Download completed!", { duration: 5000 });
         setDownloads((prev) => {
           const newMap = new Map(prev);
           const jobId = message.payload.jobId;
@@ -139,6 +154,7 @@ export function LinkFetch() {
         break;
 
       case "download-error":
+        toast.error(`Download failed: ${message.payload.error}`, { duration: 6000 });
         setDownloads((prev) => {
           const newMap = new Map(prev);
           const jobId = message.payload.jobId;
@@ -155,6 +171,7 @@ export function LinkFetch() {
         break;
 
       case "download-cancelled":
+        toast("Download cancelled", { icon: "⚠️" });
         setDownloads((prev) => {
           const newMap = new Map(prev);
           const jobId = message.payload.jobId;
@@ -172,12 +189,19 @@ export function LinkFetch() {
       case "queue-status":
         const jobsMap = new Map();
         message.payload.jobs.forEach((job: DownloadJob) => {
-          jobsMap.set(job.id, job);
+          // Convert date strings to Date objects if needed
+          const normalizedJob = {
+            ...job,
+            createdAt: typeof job.createdAt === 'string' ? new Date(job.createdAt) : job.createdAt,
+            completedAt: job.completedAt && typeof job.completedAt === 'string' ? new Date(job.completedAt) : job.completedAt,
+          };
+          jobsMap.set(job.id, normalizedJob);
         });
         setDownloads(jobsMap);
         break;
 
       case "queue-cleared":
+        toast.success("Queue cleared");
         setDownloads(new Map());
         break;
     }
@@ -477,13 +501,27 @@ export function LinkFetch() {
         </div>
       )}
 
-      <textarea
-        ref={responseInputRef}
-        readOnly
-        value={isLoading ? "Loading..." : undefined}
-        placeholder={isLoading ? "Loading..." : "Logs will appear here..."}
-        className="w-full min-h-[140px] bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-3 text-[#fbf0df] font-mono resize-y focus:border-[#f3d5a3] placeholder-[#fbf0df]/40"
-      />
+      {/* Collapsible Logs Section */}
+      <div className="bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl overflow-hidden">
+        <button
+          onClick={() => setShowLogs(!showLogs)}
+          className="w-full flex items-center justify-between p-3 text-left hover:bg-[#252525] transition-colors"
+        >
+          <span className="text-[#fbf0df] font-semibold">Debug Logs</span>
+          <span className="text-[#fbf0df] text-xl">{showLogs ? '▼' : '▶'}</span>
+        </button>
+        {showLogs && (
+          <div className="border-t border-[#fbf0df]/20">
+            <textarea
+              ref={responseInputRef}
+              readOnly
+              value={isLoading ? "Loading..." : undefined}
+              placeholder={isLoading ? "Loading..." : "Logs will appear here..."}
+              className="w-full min-h-[140px] bg-[#0d0d0d] border-0 p-3 text-[#fbf0df] font-mono text-sm resize-y focus:outline-none placeholder-[#fbf0df]/40"
+            />
+          </div>
+        )}
+      </div>
 
       {/* Download Queue */}
       {downloads.size > 0 && (
@@ -536,6 +574,11 @@ export function LinkFetch() {
                 {/* Progress Bar */}
                 {job.status === "downloading" && (
                   <div className="space-y-1">
+                    {job.progress.currentFile && (
+                      <p className="text-xs text-[#fbf0df]/70 mb-1 truncate">
+                        📝 {job.progress.currentFile}
+                      </p>
+                    )}
                     <div className="w-full bg-[#1a1a1a] rounded-full h-2 overflow-hidden">
                       <div
                         className="bg-[#fbf0df] h-full transition-all duration-300"
