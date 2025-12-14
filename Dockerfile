@@ -1,5 +1,5 @@
 # Build stage
-FROM oven/bun:1 AS builder
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
@@ -9,45 +9,45 @@ COPY package.json bun.lockb* ./
 # Install dependencies
 RUN bun install --frozen-lockfile
 
-# Copy source code
-COPY . .
+# Copy only necessary files for build
+COPY src ./src
+COPY tsconfig.json build.ts ./
 
 # Build frontend assets
 RUN bun run build.ts
 
 # Production stage
-FROM oven/bun:1-slim
+FROM oven/bun:1-alpine
 
 WORKDIR /app
 
-# Install yt-dlp and ffmpeg
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install yt-dlp and ffmpeg (Alpine packages are much smaller)
+RUN apk add --no-cache \
     python3 \
-    python3-pip \
+    py3-pip \
     ffmpeg \
-    && pip3 install --no-cache-dir --break-system-packages yt-dlp \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && pip3 install --no-cache-dir yt-dlp \
+    && rm -rf /root/.cache /tmp/*
 
 # Copy package files and install production dependencies only
 COPY package.json bun.lockb* ./
-RUN bun install --production --frozen-lockfile
+RUN bun install --production --frozen-lockfile \
+    && rm -rf /root/.bun/install/cache
 
 # Copy built assets from builder
 COPY --from=builder /app/dist ./dist
 
-# Copy source code
+# Copy only necessary source files
 COPY src ./src
 COPY tsconfig.json ./
 
-# Create download directory
-RUN mkdir -p /downloads
+# Create download and data directories
+RUN mkdir -p /downloads /app/data
 
 # Set environment variables
-ENV NODE_ENV=production
-ENV DOWNLOAD_DIR=/downloads
-ENV PORT=3000
+ENV NODE_ENV=production \
+    DOWNLOAD_DIR=/downloads \
+    PORT=3000
 
 # Expose port
 EXPOSE 3000

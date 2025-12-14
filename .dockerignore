@@ -1,17 +1,55 @@
+# Dependencies
 node_modules
+.bun
+
+# Build outputs
 dist
+*.log
+
+# Data directories
 downloads
 data
+.cache
+
+# Git
+.git
+.gitignore
+.github
+.gitattributes
+
+# Environment files
 .env
 .env.local
 .env.*.local
-.git
-.github
+
+# IDE
 .vscode
 .idea
 .DS_Store
-*.log
+
+# Documentation (except README for reference)
 *.md
 !README.md
+
+# Test & CI
 coverage
-.cache
+.nyc_output
+test
+tests
+__tests__
+*.test.*
+*.spec.*
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# Scripts
+docker-build.sh
+
+# Other
+*.log
+*.swp
+*.swo
+*~

@@ -12,6 +12,7 @@ import type {
 export class YtDlpCli {
   private speedHistory: number[] = [];
   private readonly SPEED_HISTORY_SIZE = 5;
+  private activeProcesses: Map<string, any> = new Map();
 
   async getMetadata(url: string): Promise<YtDlpMetadataResponse> {
     const process =
@@ -133,7 +134,8 @@ export class YtDlpCli {
     outputPath: string,
     formatId?: string,
     playlistItems?: number[],
-    onProgress?: (progress: DownloadProgress) => void
+    onProgress?: (progress: DownloadProgress) => void,
+    downloadId?: string
   ): Promise<string[]> {
     const args = [
       "yt-dlp",
@@ -164,8 +166,14 @@ export class YtDlpCli {
       stderr: "pipe",
     });
 
+    // Store process reference for cancellation
+    if (downloadId) {
+      this.activeProcesses.set(downloadId, proc);
+    }
+
     const files: string[] = [];
     let lastProgress: DownloadProgress = { percent: 0 };
+    let wasCancelled = false;
 
     // Reset speed history for new download
     this.speedHistory = [];
@@ -220,15 +228,44 @@ export class YtDlpCli {
       }
     };
 
-    await Promise.all([processOutput(proc.stdout), processOutput(proc.stderr)]);
+    try {
+      await Promise.all([
+        processOutput(proc.stdout),
+        processOutput(proc.stderr),
+      ]);
 
-    await proc.exited;
+      await proc.exited;
 
-    if (proc.exitCode !== 0) {
-      throw new Error(`yt-dlp failed with exit code ${proc.exitCode}`);
+      if (proc.exitCode !== 0 && !wasCancelled) {
+        throw new Error(`yt-dlp failed with exit code ${proc.exitCode}`);
+      }
+    } finally {
+      // Clean up process reference
+      if (downloadId) {
+        this.activeProcesses.delete(downloadId);
+      }
+    }
+
+    if (wasCancelled) {
+      throw new Error("Download was cancelled");
     }
 
     return files;
+  }
+
+  cancelDownload(downloadId: string): boolean {
+    const proc = this.activeProcesses.get(downloadId);
+    if (proc) {
+      try {
+        proc.kill();
+        this.activeProcesses.delete(downloadId);
+        return true;
+      } catch (error) {
+        console.error("Failed to kill process:", error);
+        return false;
+      }
+    }
+    return false;
   }
 
   private parseProgress(line: string): Partial<DownloadProgress> | null {

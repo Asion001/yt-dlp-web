@@ -255,7 +255,8 @@ export class DownloadQueueManager {
                 payload: { jobId: job.id, progress, status: "downloading" },
               });
             }
-          }
+          },
+          job.id
         );
       }
 
@@ -270,14 +271,24 @@ export class DownloadQueueManager {
         payload: { jobId: job.id, files },
       });
     } catch (error) {
-      job.status = "failed";
-      job.error = String(error);
-      this.saveState();
-
-      this.broadcast(job.id, {
-        type: "download-error",
-        payload: { jobId: job.id, error: job.error },
-      });
+      const errorMsg = String(error);
+      // Check if error is due to cancellation
+      if (errorMsg.includes("cancelled")) {
+        job.status = "cancelled";
+        this.saveState();
+        this.broadcast(job.id, {
+          type: "download-cancelled",
+          payload: { jobId: job.id },
+        });
+      } else {
+        job.status = "failed";
+        job.error = errorMsg;
+        this.saveState();
+        this.broadcast(job.id, {
+          type: "download-error",
+          payload: { jobId: job.id, error: job.error },
+        });
+      }
     }
   }
 
@@ -321,7 +332,8 @@ export class DownloadQueueManager {
               currentVideo: completedItems,
               totalVideos: totalItems,
             });
-          }
+          },
+          job.id
         );
 
         allFiles.push(...files);
@@ -345,14 +357,26 @@ export class DownloadQueueManager {
       }
       job.status = "cancelled";
       this.saveState();
+      this.broadcast(jobId, {
+        type: "download-cancelled",
+        payload: { jobId },
+      });
       return true;
     }
 
     if (job.status === "downloading") {
-      // TODO: Implement process termination
-      job.status = "cancelled";
-      this.saveState();
-      return true;
+      // Kill the active yt-dlp process
+      const killed = this.ytDlp.cancelDownload(jobId);
+      if (killed) {
+        job.status = "cancelled";
+        this.saveState();
+        this.broadcast(jobId, {
+          type: "download-cancelled",
+          payload: { jobId },
+        });
+        return true;
+      }
+      return false;
     }
 
     return false;

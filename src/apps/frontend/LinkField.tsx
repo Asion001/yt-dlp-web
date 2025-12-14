@@ -154,6 +154,21 @@ export function LinkFetch() {
         });
         break;
 
+      case "download-cancelled":
+        setDownloads((prev) => {
+          const newMap = new Map(prev);
+          const jobId = message.payload.jobId;
+          const existingJob = newMap.get(jobId);
+          if (existingJob) {
+            newMap.set(jobId, {
+              ...existingJob,
+              status: "cancelled",
+            });
+          }
+          return newMap;
+        });
+        break;
+
       case "queue-status":
         const jobsMap = new Map();
         message.payload.jobs.forEach((job: DownloadJob) => {
@@ -497,6 +512,7 @@ export function LinkFetch() {
                       Status: <span className={`font-semibold ${
                         job.status === "completed" ? "text-green-400" :
                         job.status === "failed" ? "text-red-400" :
+                        job.status === "cancelled" ? "text-gray-400" :
                         job.status === "downloading" ? "text-blue-400" :
                         "text-yellow-400"
                       }`}>{job.status}</span>
