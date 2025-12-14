@@ -194,7 +194,8 @@ export class YtDlpCli {
       "--no-warnings",
       "--newline",
       "--restrict-filenames",
-      "--merge-output-format", "mp4", // Merge video+audio into single mp4
+      "--merge-output-format",
+      "mp4", // Merge video+audio into single mp4
       "-o",
       outputPath,
     ];
