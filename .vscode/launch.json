@@ -1,0 +1,47 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "node",
+            "request": "launch",
+            "name": "Debug Backend (Bun)",
+            "runtimeExecutable": "bun",
+            "runtimeArgs": [
+                "--inspect-brk=localhost:9229",
+                "--hot",
+                "run",
+                "src/index.ts"
+            ],
+            "console": "integratedTerminal",
+            "skipFiles": [
+                "<node_internals>/**"
+            ],
+            "sourceMaps": true,
+            "restart": true,
+            "serverReadyAction": {
+                "pattern": "Server running at (https?://[^\\s]+)",
+                "uriFormat": "%s",
+                "action": "debugWithChrome"
+            }
+        },
+        {
+            "type": "chrome",
+            "request": "launch",
+            "name": "Debug Frontend (Chrome)",
+            "url": "http://localhost:3000",
+            "webRoot": "${workspaceFolder}/src/apps/frontend",
+            "sourceMaps": true,
+            "timeout": 30000
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Debug Full Stack",
+            "configurations": [
+                "Debug Backend (Bun)",
+                "Debug Frontend (Chrome)"
+            ],
+            "stopAll": true
+        }
+    ]
+}
