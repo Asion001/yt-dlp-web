@@ -6,24 +6,18 @@ import reactLogo from "./react.svg";
 
 export function App() {
   return (
-    <div className="max-w-7xl mx-auto p-8 text-center relative z-10">
-      <div className="flex justify-center items-center gap-8 mb-8">
-        <img
-          src={logo}
-          alt="Bun Logo"
-          className="h-24 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#646cffaa] scale-120"
-        />
-        <img
-          src={reactLogo}
-          alt="React Logo"
-          className="h-24 p-6 transition-all duration-300 hover:drop-shadow-[0_0_2em_#61dafbaa] animate-[spin_20s_linear_infinite]"
-        />
+    <div className="max-w-7xl mx-auto p-8 text-center relative z-10 min-h-screen">
+      <div className="mb-8">
+        <h1 className="text-6xl font-bold my-4 leading-tight bg-gradient-to-r from-[#e94560] via-[#533483] to-[#0f3460] bg-clip-text text-transparent">
+          yt-dlp Web
+        </h1>
+        <p className="text-lg text-white/80 mb-2">
+          Download videos from YouTube and other platforms
+        </p>
+        <p className="text-sm text-white/50">
+          Powered by yt-dlp, Bun, and React
+        </p>
       </div>
-
-      <h1 className="text-5xl font-bold my-4 leading-tight">Bun + React</h1>
-      <p>
-        Edit <code className="bg-[#1a1a1a] px-2 py-1 rounded font-mono">src/App.tsx</code> and save to test HMR
-      </p>
       <LinkFetch />
     </div>
   );

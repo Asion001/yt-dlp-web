@@ -1,0 +1,22 @@
+services:
+  yt-dlp-web:
+    build: .
+    container_name: yt-dlp-web
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DOWNLOAD_DIR=/downloads
+      - PORT=3000
+    volumes:
+      # Persist downloads
+      - ./downloads:/downloads
+      # Persist queue state
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - yt-dlp-network
+
+networks:
+  yt-dlp-network:
+    driver: bridge

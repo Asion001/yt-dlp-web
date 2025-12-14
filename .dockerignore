@@ -1,0 +1,17 @@
+node_modules
+dist
+downloads
+data
+.env
+.env.local
+.env.*.local
+.git
+.github
+.vscode
+.idea
+.DS_Store
+*.log
+*.md
+!README.md
+coverage
+.cache
