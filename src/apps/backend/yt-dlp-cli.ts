@@ -21,9 +21,53 @@ export class YtDlpCli {
     rawLog += new TextDecoder().decode(process.stdout);
     rawLog += new TextDecoder().decode(process.stderr);
 
-    const metadata = JSON.parse(new TextDecoder().decode(process.stdout)) as
-      | VideoMetadata
-      | PlaylistMetadata;
+    const stdout = new TextDecoder().decode(process.stdout).trim();
+
+    // Handle newline-delimited JSON (multiple objects for playlists)
+    const lines = stdout.split("\n").filter((line) => line.trim());
+
+    if (lines.length === 0) {
+      throw new Error("No metadata received from yt-dlp");
+    }
+
+    // If there's only one line, parse it as a single video/playlist
+    if (lines.length === 1) {
+      const metadata = JSON.parse(lines[0]!) as
+        | VideoMetadata
+        | PlaylistMetadata;
+      return { rawLog, metadata };
+    }
+
+    // Multiple lines means playlist entries - parse the first one as it contains playlist info
+    const firstEntry = JSON.parse(lines[0]!);
+
+    // Build playlist metadata from entries
+    const entries = lines.map((line) => {
+      const entry = JSON.parse(line);
+      return {
+        id: entry.id,
+        title: entry.title || "[Untitled]",
+        url:
+          entry.url ||
+          entry.webpage_url ||
+          `https://www.youtube.com/watch?v=${entry.id}`,
+        duration: entry.duration,
+        thumbnail:
+          entry.thumbnails?.[entry.thumbnails.length - 1]?.url ||
+          entry.thumbnail,
+        uploader: entry.uploader || entry.channel,
+        playlist_index: entry.playlist_index,
+      };
+    });
+    const metadata: PlaylistMetadata = {
+      _type: "playlist",
+      id: firstEntry.playlist_id || firstEntry.id,
+      title: firstEntry.playlist_title || firstEntry.playlist || "Playlist",
+      uploader: firstEntry.playlist_uploader || firstEntry.uploader,
+      entries: entries,
+      webpage_url: firstEntry.playlist_webpage_url || url,
+      playlist_count: entries.length,
+    };
 
     return { rawLog, metadata };
   }

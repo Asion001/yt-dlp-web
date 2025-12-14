@@ -159,14 +159,10 @@ export class DownloadQueueManager {
       outputPath: fullPath,
       customPath: request.subfolder,
       formatId: request.format_id,
+      playlistItems: request.playlistItems,
+      playlistItemFormats: request.playlistItemFormats,
       createdAt: new Date(),
     };
-
-    // If playlist and specific items requested, store them
-    if (type === "playlist" && request.playlistItems) {
-      // Store playlist items in job metadata (we'll need to extend DownloadJob type)
-      (job as any).playlistItems = request.playlistItems;
-    }
 
     this.jobs.set(jobId, job);
     this.queue.push(jobId);
@@ -216,30 +212,52 @@ export class DownloadQueueManager {
       );
       await mkdir(outputDir, { recursive: true });
 
-      const playlistItems = (job as any).playlistItems;
-
       // Throttle progress updates - only send every 500ms
       let lastBroadcastTime = 0;
       const BROADCAST_INTERVAL = 500; // ms
 
-      const files = await this.ytDlp.download(
-        job.url,
-        job.outputPath,
-        job.formatId,
-        playlistItems,
-        (progress: DownloadProgress) => {
-          job.progress = progress;
+      let files: string[];
 
-          const now = Date.now();
-          if (now - lastBroadcastTime >= BROADCAST_INTERVAL) {
-            lastBroadcastTime = now;
-            this.broadcast(job.id, {
-              type: "download-progress",
-              payload: { jobId: job.id, progress, status: "downloading" },
-            });
+      // Check if we need to download playlist items with different formats
+      if (
+        job.playlistItemFormats &&
+        Object.keys(job.playlistItemFormats).length > 0
+      ) {
+        // Download each item separately with its specific format
+        files = await this.downloadPlaylistWithPerItemFormats(
+          job,
+          (progress: DownloadProgress) => {
+            job.progress = progress;
+            const now = Date.now();
+            if (now - lastBroadcastTime >= BROADCAST_INTERVAL) {
+              lastBroadcastTime = now;
+              this.broadcast(job.id, {
+                type: "download-progress",
+                payload: { jobId: job.id, progress, status: "downloading" },
+              });
+            }
           }
-        }
-      );
+        );
+      } else {
+        // Standard download
+        files = await this.ytDlp.download(
+          job.url,
+          job.outputPath,
+          job.formatId,
+          job.playlistItems,
+          (progress: DownloadProgress) => {
+            job.progress = progress;
+            const now = Date.now();
+            if (now - lastBroadcastTime >= BROADCAST_INTERVAL) {
+              lastBroadcastTime = now;
+              this.broadcast(job.id, {
+                type: "download-progress",
+                payload: { jobId: job.id, progress, status: "downloading" },
+              });
+            }
+          }
+        );
+      }
 
       job.status = "completed";
       job.completedAt = new Date();
@@ -261,6 +279,59 @@ export class DownloadQueueManager {
         payload: { jobId: job.id, error: job.error },
       });
     }
+  }
+
+  private async downloadPlaylistWithPerItemFormats(
+    job: DownloadJob,
+    onProgress: (progress: DownloadProgress) => void
+  ): Promise<string[]> {
+    const allFiles: string[] = [];
+    const itemsToDownload = job.playlistItems || [];
+    const itemFormats = job.playlistItemFormats || {};
+
+    const totalItems = itemsToDownload.length;
+    let completedItems = 0;
+
+    for (const itemIndex of itemsToDownload) {
+      const formatForItem = itemFormats[itemIndex] || job.formatId;
+
+      // Update progress for playlist tracking
+      completedItems++;
+      onProgress({
+        percent: 0,
+        currentVideo: completedItems,
+        totalVideos: totalItems,
+      });
+
+      try {
+        // Download single item with its specific format
+        const files = await this.ytDlp.download(
+          job.url,
+          job.outputPath,
+          formatForItem,
+          [itemIndex], // Download only this item
+          (itemProgress: DownloadProgress) => {
+            // Combine item progress with playlist progress
+            const overallPercent =
+              ((completedItems - 1) / totalItems) * 100 +
+              itemProgress.percent / totalItems;
+            onProgress({
+              ...itemProgress,
+              percent: overallPercent,
+              currentVideo: completedItems,
+              totalVideos: totalItems,
+            });
+          }
+        );
+
+        allFiles.push(...files);
+      } catch (error) {
+        console.error(`Failed to download item ${itemIndex}:`, error);
+        // Continue with other items even if one fails
+      }
+    }
+
+    return allFiles;
   }
 
   cancelDownload(jobId: string): boolean {

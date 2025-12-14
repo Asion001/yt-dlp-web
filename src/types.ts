@@ -51,6 +51,8 @@ export interface PlaylistEntry {
   thumbnail?: string;
   uploader?: string;
   playlist_index?: number;
+  formats?: VideoFormat[];
+  recommendation?: FormatRecommendation;
 }
 
 export interface YtDlpMetadataResponse {
@@ -70,6 +72,7 @@ export interface DownloadRequest {
   subfolder?: string;
   filename?: string;
   playlistItems?: number[];
+  playlistItemFormats?: Record<number, string>; // Map of playlist_index -> format_id
 }
 
 export interface DownloadJob {
@@ -81,6 +84,8 @@ export interface DownloadJob {
   outputPath: string;
   customPath?: string;
   formatId?: string;
+  playlistItems?: number[];
+  playlistItemFormats?: Record<number, string>; // Map of playlist_index -> format_id
   createdAt: Date;
   completedAt?: Date;
   error?: string;

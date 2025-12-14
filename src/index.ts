@@ -39,6 +39,7 @@ const server = Bun.serve({
   websocket: websocketHandler,
 
   port: process.env.PORT || 3000,
+  idleTimeout: 120,
 });
 
 console.log(`🚀 Server running at ${server.url}`);

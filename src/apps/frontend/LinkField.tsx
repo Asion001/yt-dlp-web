@@ -7,6 +7,7 @@ import type {
 } from "@/types";
 import { useRef, useState, useEffect, type FormEvent } from "react";
 import { Metadata } from "./Metadata";
+import { PlaylistItem } from "./PlaylistItem";
 
 export function LinkFetch() {
   const responseInputRef = useRef<HTMLTextAreaElement>(null);
@@ -18,6 +19,8 @@ export function LinkFetch() {
   const [subfolder, setSubfolder] = useState("");
   const [filename, setFilename] = useState("%(title).200B.%(ext)s");
   const [selectedPlaylistItems, setSelectedPlaylistItems] = useState<number[]>([]);
+  const [playlistItemFormats, setPlaylistItemFormats] = useState<Record<number, string>>({});
+  const [globalPlaylistFormat, setGlobalPlaylistFormat] = useState<string | undefined>(undefined);
   const lastDownloadUrlRef = useRef<string>("");
 
 
@@ -171,6 +174,8 @@ export function LinkFetch() {
     setMetadata(null);
     setRecommendation(null);
     setSelectedPlaylistItems([]);
+    setPlaylistItemFormats({});
+    setGlobalPlaylistFormat(undefined);
 
     try {
       const form = e.currentTarget;
@@ -217,14 +222,28 @@ export function LinkFetch() {
       return newMap;
     });
 
+    // Determine format_id: per-item formats or global format or passed format
+    let finalFormatId = formatId;
+    let finalPlaylistItemFormats = playlistItemFormats;
+
+    // If it's a playlist and we have a global format, apply it to all selected items without specific formats
+    if (metadata._type === "playlist" && globalPlaylistFormat) {
+      selectedPlaylistItems.forEach((idx) => {
+        if (!finalPlaylistItemFormats[idx]) {
+          finalPlaylistItemFormats = { ...finalPlaylistItemFormats, [idx]: globalPlaylistFormat };
+        }
+      });
+    }
+
     const request = {
       type: "download-request",
       payload: {
         url,
-        format_id: formatId,
+        format_id: finalFormatId,
         subfolder: subfolder || undefined,
         filename: filename || undefined,
         playlistItems: selectedPlaylistItems.length > 0 ? selectedPlaylistItems : undefined,
+        playlistItemFormats: Object.keys(finalPlaylistItemFormats).length > 0 ? finalPlaylistItemFormats : undefined,
       },
     };
 
@@ -269,6 +288,28 @@ export function LinkFetch() {
 
   const deselectAllPlaylist = () => {
     setSelectedPlaylistItems([]);
+    setPlaylistItemFormats({});
+  };
+
+  const setItemFormat = (index: number, formatId?: string) => {
+    setPlaylistItemFormats((prev) => {
+      if (formatId === undefined) {
+        const newFormats = { ...prev };
+        delete newFormats[index];
+        return newFormats;
+      }
+      return { ...prev, [index]: formatId };
+    });
+  };
+
+  const applyGlobalFormat = () => {
+    if (!metadata || metadata._type !== "playlist" || !globalPlaylistFormat) return;
+    
+    const newFormats: Record<number, string> = {};
+    selectedPlaylistItems.forEach((idx) => {
+      newFormats[idx] = globalPlaylistFormat;
+    });
+    setPlaylistItemFormats(newFormats);
   };
 
   return (
@@ -281,6 +322,7 @@ export function LinkFetch() {
           type="url"
           name="link"
           required={true}
+          placeholder="https://www.youtube.com/watch?v=***"
           className="w-full flex-1 bg-transparent border-0 text-[#fbf0df] font-mono text-base py-1.5 px-2 outline-none focus:text-white placeholder-[#fbf0df]/40"
         />
         <button
@@ -327,47 +369,95 @@ export function LinkFetch() {
       {/* Playlist Selection */}
       {metadata && metadata._type === "playlist" && (
         <div className="bg-[#1a1a1a] border-2 border-[#fbf0df] rounded-xl p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-white font-semibold">
-              Playlist: {metadata.title} ({metadata.playlist_count} videos)
-            </h3>
-            <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 className="text-white font-semibold text-lg">
+                {metadata.title}
+              </h3>
+              <p className="text-[#fbf0df]/60 text-sm mt-0.5">
+                {metadata.uploader && <span>{metadata.uploader} • </span>}
+                {metadata.playlist_count} video{metadata.playlist_count !== 1 ? 's' : ''}
+              </p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
               <button
                 onClick={selectAllPlaylist}
-                className="text-xs bg-[#fbf0df] text-[#1a1a1a] px-3 py-1 rounded hover:bg-[#f3d5a3]"
+                className="text-sm bg-[#fbf0df] text-[#1a1a1a] px-4 py-2 rounded-lg font-medium hover:bg-[#f3d5a3] transition-colors"
               >
                 Select All
               </button>
               <button
                 onClick={deselectAllPlaylist}
-                className="text-xs bg-[#0d0d0d] text-[#fbf0df] border border-[#fbf0df]/20 px-3 py-1 rounded hover:bg-[#252525]"
+                className="text-sm bg-[#0d0d0d] text-[#fbf0df] border border-[#fbf0df]/20 px-4 py-2 rounded-lg font-medium hover:bg-[#252525] transition-colors"
               >
-                Deselect All
+                Clear
               </button>
+              {selectedPlaylistItems.length > 0 && (
+                <button
+                  onClick={() => startDownload()}
+                  className="text-sm bg-green-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-green-700 transition-colors"
+                >
+                  Download {selectedPlaylistItems.length}
+                </button>
+              )}
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
-            {metadata.entries.map((entry, idx) => (
-              <label
-                key={entry.id}
-                className="flex items-center gap-2 bg-[#0d0d0d] border border-[#fbf0df]/20 rounded p-2 cursor-pointer hover:bg-[#252525]"
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedPlaylistItems.includes(idx + 1)}
-                  onChange={() => togglePlaylistItem(idx + 1)}
-                  className="w-4 h-4"
-                />
-                <span className="text-sm text-[#fbf0df] truncate flex-1">
-                  {idx + 1}. {entry.title}
-                </span>
-              </label>
-            ))}
-          </div>
+
+          {/* Global Format Settings */}
           {selectedPlaylistItems.length > 0 && (
-            <p className="text-sm text-[#fbf0df]/70 mt-2">
-              Selected: {selectedPlaylistItems.length} video(s)
-            </p>
+            <div className="mb-4 p-3 bg-[#0d0d0d] border border-[#fbf0df]/20 rounded-lg">
+              <h4 className="text-sm font-semibold text-white mb-2">Global Format Settings</h4>
+              <p className="text-xs text-[#fbf0df]/60 mb-2">
+                Apply the same format to all selected videos (optional)
+              </p>
+              <div className="flex gap-2 items-center">
+                <select
+                  value={globalPlaylistFormat || ""}
+                  onChange={(e) => setGlobalPlaylistFormat(e.target.value || undefined)}
+                  className="flex-1 bg-[#1a1a1a] border border-[#fbf0df]/20 rounded-lg p-2 text-[#fbf0df] text-sm focus:border-[#f3d5a3] outline-none"
+                >
+                  <option value="">Auto (Best Quality)</option>
+                  <option value="bestvideo[height<=720]+bestaudio/best[height<=720]">720p</option>
+                  <option value="bestvideo[height<=1080]+bestaudio/best[height<=1080]">1080p</option>
+                  <option value="bestvideo[height<=1440]+bestaudio/best[height<=1440]">1440p</option>
+                  <option value="bestvideo[height<=2160]+bestaudio/best[height<=2160]">4K (2160p)</option>
+                  <option value="bestaudio/best">Audio Only</option>
+                </select>
+                <button
+                  onClick={applyGlobalFormat}
+                  disabled={!globalPlaylistFormat}
+                  className="bg-[#fbf0df] text-[#1a1a1a] px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#f3d5a3] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Apply to All
+                </button>
+              </div>
+            </div>
+          )}
+          
+          <div className="space-y-2 max-h-[500px] overflow-y-auto pr-2">
+            {metadata.entries.map((entry, idx) => {
+              const playlistIndex = idx + 1;
+              return (
+                <PlaylistItem
+                  key={entry.id}
+                  entry={entry}
+                  index={playlistIndex}
+                  isSelected={selectedPlaylistItems.includes(playlistIndex)}
+                  onToggle={() => togglePlaylistItem(playlistIndex)}
+                  selectedFormat={playlistItemFormats[playlistIndex]}
+                  onFormatChange={(formatId) => setItemFormat(playlistIndex, formatId)}
+                />
+              );
+            })}
+          </div>
+          
+          {selectedPlaylistItems.length > 0 && (
+            <div className="mt-4 pt-3 border-t border-[#fbf0df]/20">
+              <p className="text-sm text-[#fbf0df]/70 text-center">
+                <span className="font-semibold text-white">{selectedPlaylistItems.length}</span> of{' '}
+                <span className="font-semibold text-white">{metadata.playlist_count}</span> videos selected
+              </p>
+            </div>
           )}
         </div>
       )}

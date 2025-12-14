@@ -40,6 +40,7 @@ const _apiRoutes = {
 
         return Response.json(result);
       } catch (error) {
+        console.error("Metadata fetch error:", error);
         return Response.json({ error: String(error) }, { status: 500 });
       }
     },
