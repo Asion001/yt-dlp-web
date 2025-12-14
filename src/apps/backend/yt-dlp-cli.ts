@@ -194,18 +194,25 @@ export class YtDlpCli {
       "--no-warnings",
       "--newline",
       "--restrict-filenames",
-      "--merge-output-format",
-      "mp4", // Merge video+audio into single mp4
       "-o",
       outputPath,
     ];
 
     if (formatId) {
-      args.push("-f", formatId);
+      // If a specific format is selected, ensure we get audio too
+      // Format strings like "bestvideo+bestaudio" already have audio
+      // But format IDs like "137" or "207" are video-only, so append +bestaudio
+      if (/^\d+$/.test(formatId)) {
+        // Pure numeric format ID - likely video-only, add best audio
+        args.push("-f", `${formatId}+bestaudio/best`);
+      } else {
+        // Already a format string (contains operators like +, /, etc.)
+        args.push("-f", formatId);
+      }
     } else {
       args.push(
         "-f",
-        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best"
+        "bestvideo[ext=mp4]+bestaudio[ext=m4a]/bestvideo+bestaudio/best"
       );
     }
 
