@@ -229,7 +229,7 @@ export class DownloadQueueManager {
         playlistItems,
         (progress: DownloadProgress) => {
           job.progress = progress;
-          
+
           const now = Date.now();
           if (now - lastBroadcastTime >= BROADCAST_INTERVAL) {
             lastBroadcastTime = now;
@@ -306,13 +306,13 @@ export class DownloadQueueManager {
     this.activeDownloads.forEach((jobId) => {
       this.cancelDownload(jobId);
     });
-    
+
     // Clear all jobs and queue
     this.jobs.clear();
     this.queue = [];
     this.activeDownloads.clear();
     this.wsClients.clear();
-    
+
     this.saveState();
   }
 

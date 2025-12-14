@@ -5,11 +5,13 @@ This project includes automated CI/CD workflows using GitHub Actions.
 ## Workflows
 
 ### CI (Continuous Integration)
+
 **File:** `.github/workflows/ci.yml`
 
 Runs on every push and pull request to `main` and `develop` branches.
 
 **Steps:**
+
 1. Checkout code
 2. Setup Bun runtime
 3. Install dependencies
@@ -18,20 +20,24 @@ Runs on every push and pull request to `main` and `develop` branches.
 6. Upload build artifacts (retained for 7 days)
 
 ### Docker Build & Push
+
 **File:** `.github/workflows/docker.yml`
 
 Runs on:
+
 - Push to `main` branch
 - Version tags (e.g., `v1.0.0`)
 - Manual workflow dispatch
 
 **Features:**
+
 - Multi-platform builds (linux/amd64, linux/arm64)
 - Automatic versioning from Git tags
 - Pushes to GitHub Container Registry (ghcr.io)
 - Build cache optimization
 
 **Image Tags:**
+
 - `latest` - Latest main branch build
 - `main` - Main branch builds
 - `v1.0.0` - Semantic version tags
@@ -71,6 +77,7 @@ docker pull ghcr.io/YOUR_USERNAME/yt-dlp-web:latest
 ## Secrets Required
 
 For Docker workflow:
+
 - `GITHUB_TOKEN` - Automatically provided by GitHub Actions
 
 ## Customization
@@ -85,6 +92,7 @@ To customize the workflows:
 ## Manual Workflow Trigger
 
 You can manually trigger the Docker workflow from the Actions tab:
+
 1. Go to Actions tab in your repository
 2. Select "Docker Build" workflow
 3. Click "Run workflow"

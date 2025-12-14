@@ -97,7 +97,7 @@ export class YtDlpCli {
       "--newline",
       "--restrict-filenames",
       "-o",
-      outputPath
+      outputPath,
     ];
 
     if (formatId) {
@@ -122,7 +122,7 @@ export class YtDlpCli {
 
     const files: string[] = [];
     let lastProgress: DownloadProgress = { percent: 0 };
-    
+
     // Reset speed history for new download
     this.speedHistory = [];
 
@@ -204,17 +204,18 @@ export class YtDlpCli {
     if (speedMatch && speedMatch[1] && speedMatch[2]) {
       const rawSpeed = parseFloat(speedMatch[1]);
       const unit = speedMatch[2];
-      
+
       this.speedHistory.push(rawSpeed);
       if (this.speedHistory.length > this.SPEED_HISTORY_SIZE) {
         this.speedHistory.shift();
       }
-      
+
       // Calculate average speed
-      const avgSpeed = this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length;
+      const avgSpeed =
+        this.speedHistory.reduce((a, b) => a + b, 0) / this.speedHistory.length;
       progress.speed = `${avgSpeed.toFixed(2)}${unit}`;
     }
-    
+
     if (etaMatch) progress.eta = etaMatch[1];
 
     return progress;
