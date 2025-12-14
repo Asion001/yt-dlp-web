@@ -15,7 +15,23 @@ export const websocketHandler = {
 
   message(ws: any, message: string) {
     try {
-      const msg: WSMessage = JSON.parse(message);
+      let msg: WSMessage;
+      try {
+        msg = JSON.parse(message);
+      } catch (parseError) {
+        console.error("Failed to parse WebSocket message:", parseError);
+        console.error(
+          "Message content (first 200 chars):",
+          message.substring(0, 200)
+        );
+        ws.send(
+          JSON.stringify({
+            type: "error",
+            payload: { error: `Invalid JSON message: ${parseError}` },
+          })
+        );
+        return;
+      }
 
       switch (msg.type) {
         case "download-request":

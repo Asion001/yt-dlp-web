@@ -78,6 +78,7 @@ export interface DownloadRequest {
 export interface DownloadJob {
   id: string;
   url: string;
+  title?: string; // Video or playlist title
   type: "video" | "playlist";
   status: "pending" | "downloading" | "completed" | "failed" | "cancelled";
   progress: DownloadProgress;

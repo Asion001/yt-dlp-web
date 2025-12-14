@@ -48,7 +48,28 @@ export class DownloadQueueManager {
     try {
       if (existsSync(this.stateFile)) {
         const data = await readFile(this.stateFile, "utf-8");
-        const state: PersistedState = JSON.parse(data);
+
+        // Validate JSON before parsing
+        if (!data || data.trim().length === 0) {
+          console.warn("State file is empty, skipping load");
+          return;
+        }
+
+        let state: PersistedState;
+        try {
+          state = JSON.parse(data);
+        } catch (parseError) {
+          console.error("Failed to parse state file JSON:", parseError);
+          console.error(
+            "State file content (first 500 chars):",
+            data.substring(0, 500)
+          );
+          // Backup corrupted state file
+          const backupFile = `${this.stateFile}.corrupt.${Date.now()}`;
+          await writeFile(backupFile, data, "utf-8");
+          console.log(`Corrupted state backed up to: ${backupFile}`);
+          return;
+        }
 
         // Restore jobs (but mark downloading as pending since server restarted)
         state.jobs.forEach((job) => {
@@ -143,6 +164,17 @@ export class DownloadQueueManager {
     const jobId = this.generateJobId();
     const type = await this.ytDlp.detectType(request.url);
 
+    // Try to fetch title from metadata
+    let title: string | undefined;
+    try {
+      const metadata = await this.ytDlp.getMetadata(request.url);
+      if (metadata.metadata) {
+        title = metadata.metadata.title;
+      }
+    } catch (error) {
+      console.log("Failed to fetch title, continuing without it:", error);
+    }
+
     // Build output path
     let outputPath = this.downloadDir;
     if (request.subfolder) {
@@ -160,6 +192,7 @@ export class DownloadQueueManager {
     const job: DownloadJob = {
       id: jobId,
       url: request.url,
+      title,
       type,
       status: "pending",
       progress: { percent: 0 },

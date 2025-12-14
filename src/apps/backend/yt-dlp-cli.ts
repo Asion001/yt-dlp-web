@@ -15,70 +15,122 @@ export class YtDlpCli {
   private activeProcesses: Map<string, any> = new Map();
 
   async getMetadata(url: string): Promise<YtDlpMetadataResponse> {
-    const process =
-      await $`yt-dlp --no-warnings --skip-download --print-json --flat-playlist "${url}"`;
-    let rawLog = "";
+    try {
+      const process =
+        await $`yt-dlp --no-warnings --skip-download --print-json --flat-playlist "${url}"`;
+      let rawLog = "";
 
-    rawLog += new TextDecoder().decode(process.stdout);
-    rawLog += new TextDecoder().decode(process.stderr);
+      rawLog += new TextDecoder().decode(process.stdout);
+      rawLog += new TextDecoder().decode(process.stderr);
 
-    const stdout = new TextDecoder().decode(process.stdout).trim();
+      const stdout = new TextDecoder().decode(process.stdout).trim();
 
-    // Handle newline-delimited JSON (multiple objects for playlists)
-    const lines = stdout.split("\n").filter((line) => line.trim());
+      // Handle newline-delimited JSON (multiple objects for playlists)
+      const lines = stdout.split("\n").filter((line) => line.trim());
 
-    if (lines.length === 0) {
-      throw new Error("No metadata received from yt-dlp");
-    }
+      if (lines.length === 0) {
+        throw new Error("No metadata received from yt-dlp");
+      }
 
-    // If there's only one line, parse it as a single video/playlist
-    if (lines.length === 1) {
-      const metadata = JSON.parse(lines[0]!) as
-        | VideoMetadata
-        | PlaylistMetadata;
-      return { rawLog, metadata };
-    }
+      // If there's only one line, parse it as a single video/playlist
+      if (lines.length === 1) {
+        try {
+          const metadata = JSON.parse(lines[0]!) as
+            | VideoMetadata
+            | PlaylistMetadata;
+          return { rawLog, metadata };
+        } catch (parseError) {
+          throw new Error(
+            `Failed to parse metadata: ${lines[0]?.substring(
+              0,
+              100
+            )}... - ${parseError}`
+          );
+        }
+      }
 
-    // Multiple lines means playlist entries - parse the first one as it contains playlist info
-    const firstEntry = JSON.parse(lines[0]!);
+      // Multiple lines means playlist entries - parse the first one as it contains playlist info
+      let firstEntry: any;
+      try {
+        firstEntry = JSON.parse(lines[0]!);
+      } catch (parseError) {
+        throw new Error(
+          `Failed to parse first playlist entry: ${lines[0]?.substring(
+            0,
+            100
+          )}... - ${parseError}`
+        );
+      }
 
-    // Build playlist metadata from entries
-    const entries = lines.map((line) => {
-      const entry = JSON.parse(line);
-      return {
-        id: entry.id,
-        title: entry.title || "[Untitled]",
-        url:
-          entry.url ||
-          entry.webpage_url ||
-          `https://www.youtube.com/watch?v=${entry.id}`,
-        duration: entry.duration,
-        thumbnail:
-          entry.thumbnails?.[entry.thumbnails.length - 1]?.url ||
-          entry.thumbnail,
-        uploader: entry.uploader || entry.channel,
-        playlist_index: entry.playlist_index,
+      // Build playlist metadata from entries
+      const entries = lines.map((line, index) => {
+        try {
+          const entry = JSON.parse(line);
+          return {
+            id: entry.id,
+            title: entry.title || "[Untitled]",
+            url:
+              entry.url ||
+              entry.webpage_url ||
+              `https://www.youtube.com/watch?v=${entry.id}`,
+            duration: entry.duration,
+            thumbnail:
+              entry.thumbnails?.[entry.thumbnails.length - 1]?.url ||
+              entry.thumbnail,
+            uploader: entry.uploader || entry.channel,
+            playlist_index: entry.playlist_index,
+          };
+        } catch (parseError) {
+          console.error(
+            `Failed to parse playlist entry ${index + 1}:`,
+            line.substring(0, 100),
+            parseError
+          );
+          // Return a placeholder entry instead of failing completely
+          return {
+            id: `unknown_${index}`,
+            title: `[Parse Error] Entry ${index + 1}`,
+            url: url,
+            playlist_index: index + 1,
+          };
+        }
+      });
+      const metadata: PlaylistMetadata = {
+        _type: "playlist",
+        id: firstEntry.playlist_id || firstEntry.id,
+        title: firstEntry.playlist_title || firstEntry.playlist || "Playlist",
+        uploader: firstEntry.playlist_uploader || firstEntry.uploader,
+        entries: entries,
+        webpage_url: firstEntry.playlist_webpage_url || url,
+        playlist_count: entries.length,
       };
-    });
-    const metadata: PlaylistMetadata = {
-      _type: "playlist",
-      id: firstEntry.playlist_id || firstEntry.id,
-      title: firstEntry.playlist_title || firstEntry.playlist || "Playlist",
-      uploader: firstEntry.playlist_uploader || firstEntry.uploader,
-      entries: entries,
-      webpage_url: firstEntry.playlist_webpage_url || url,
-      playlist_count: entries.length,
-    };
 
-    return { rawLog, metadata };
+      return { rawLog, metadata };
+    } catch (error) {
+      console.error("getMetadata error:", error);
+      throw error;
+    }
   }
 
   async detectType(url: string): Promise<"video" | "playlist"> {
-    const process =
-      await $`yt-dlp --no-warnings --skip-download --print-json --flat-playlist "${url}"`;
-    const output = new TextDecoder().decode(process.stdout);
-    const data = JSON.parse(output);
-    return data._type === "playlist" ? "playlist" : "video";
+    try {
+      const process =
+        await $`yt-dlp --no-warnings --skip-download --print-json --flat-playlist "${url}"`;
+      const output = new TextDecoder().decode(process.stdout).trim();
+
+      if (!output) {
+        throw new Error("No output from yt-dlp");
+      }
+
+      // Parse first line only
+      const firstLine = output.split("\n")[0];
+      const data = JSON.parse(firstLine!);
+      return data._type === "playlist" ? "playlist" : "video";
+    } catch (error) {
+      console.error("detectType error:", error);
+      // Default to video if detection fails
+      return "video";
+    }
   }
 
   recommendFormat(formats: VideoFormat[]): FormatRecommendation | null {
@@ -142,6 +194,7 @@ export class YtDlpCli {
       "--no-warnings",
       "--newline",
       "--restrict-filenames",
+      "--merge-output-format", "mp4", // Merge video+audio into single mp4
       "-o",
       outputPath,
     ];

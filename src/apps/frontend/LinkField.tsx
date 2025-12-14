@@ -231,28 +231,51 @@ export function LinkFetch() {
           setRecommendation(data.recommendation);
         }
       }
-      responseInputRef.current!.value = data.metadata ? JSON.stringify(data.metadata, null, 2) : data.rawLog ?? "No data received.";
+      // Auto-open logs when there's data
+      setShowLogs(true);
+      // Use optional chaining to avoid null ref errors
+      if (responseInputRef.current) {
+        responseInputRef.current.value = data.metadata ? JSON.stringify(data.metadata, null, 2) : data.rawLog ?? "No data received.";
+      }
     } catch (error) {
-      responseInputRef.current!.value = String(error);
+      // Auto-open logs on error
+      setShowLogs(true);
+      if (responseInputRef.current) {
+        responseInputRef.current.value = String(error);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const startDownload = (formatId?: string) => {
-    if (!metadata || !ws) return;
+    if (!metadata || !ws) {
+      toast.error("Cannot start download: connection not ready");
+      return;
+    }
 
     const url = metadata.webpage_url || (metadata as any).url;
     lastDownloadUrlRef.current = url;
 
+    // Show immediate feedback
+    const itemCount = selectedPlaylistItems.length;
+    if (itemCount > 0) {
+      toast.loading(`Queueing ${itemCount} video${itemCount > 1 ? 's' : ''}...`, { id: 'download-queue' });
+    } else {
+      toast.loading('Queueing download...', { id: 'download-queue' });
+    }
+
     // Create a temp job ID to show immediately in UI
     const tempJobId = `dl_${Date.now()}_pending`;
+    const title = metadata.title;
+    
     setDownloads((prev) => {
       const newMap = new Map(prev);
       newMap.set(tempJobId, {
         id: tempJobId,
         url,
-        type: "video",
+        title,
+        type: metadata._type === "playlist" ? "playlist" : "video",
         status: "pending",
         progress: { percent: 0 },
         outputPath: "",
@@ -288,10 +311,14 @@ export function LinkFetch() {
 
     console.log("Sending download request:", request);
     ws.send(JSON.stringify(request));
+    
+    // Dismiss the loading toast after a short delay (will be replaced by download-started toast)
+    setTimeout(() => toast.dismiss('download-queue'), 1000);
   };
 
   const cancelDownload = (jobId: string) => {
     if (!ws) return;
+    toast.loading('Cancelling download...', { id: `cancel-${jobId}`, duration: 2000 });
     ws.send(JSON.stringify({
       type: "download-cancel",
       payload: { jobId },
@@ -301,6 +328,7 @@ export function LinkFetch() {
   const clearQueue = () => {
     if (!ws) return;
     if (confirm('Are you sure you want to clear all downloads?')) {
+      toast.loading('Clearing queue...', { id: 'clear-queue', duration: 2000 });
       ws.send(JSON.stringify({
         type: "clear-queue",
         payload: {},
@@ -367,9 +395,15 @@ export function LinkFetch() {
         <button
           type="submit"
           disabled={isLoading}
-          className="bg-[#fbf0df] text-[#1a1a1a] border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-[#f3d5a3] hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          className="bg-[#fbf0df] text-[#1a1a1a] border-0 px-5 py-1.5 rounded-lg font-bold transition-all duration-100 hover:bg-[#f3d5a3] hover:-translate-y-px cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
-         Load
+          {isLoading && (
+            <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          )}
+          {isLoading ? 'Loading...' : 'Load'}
         </button>
       </form>
 
@@ -536,35 +570,58 @@ export function LinkFetch() {
             </button>
           </div>
           <div className="space-y-2">
-            {Array.from(downloads.values()).map((job) => (
+            {Array.from(downloads.values()).map((job) => {
+              // Calculate total progress for playlists
+              const isPlaylist = job.type === "playlist" || (job.progress.currentVideo && job.progress.totalVideos);
+              const totalProgress = isPlaylist && job.progress.currentVideo && job.progress.totalVideos
+                ? ((job.progress.currentVideo - 1) / job.progress.totalVideos * 100) + (job.progress.percent / job.progress.totalVideos)
+                : job.progress.percent;
+              
+              return (
               <div
                 key={job.id}
                 className="bg-[#0d0d0d] border border-[#fbf0df]/20 rounded-lg p-3"
               >
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex-1">
-                    <p className="text-sm text-[#fbf0df] truncate font-mono">
-                      {job.url}
+                <div className="flex items-start justify-between mb-2 gap-2">
+                  <div className="flex-1 min-w-0">
+                    {/* Title or URL with proper overflow handling */}
+                    <p className="text-sm text-[#fbf0df] font-semibold mb-1 break-words line-clamp-2">
+                      {job.title || 'Untitled'}
                     </p>
-                    <p className="text-xs text-[#fbf0df]/60 mt-1">
-                      Status: <span className={`font-semibold ${
-                        job.status === "completed" ? "text-green-400" :
-                        job.status === "failed" ? "text-red-400" :
-                        job.status === "cancelled" ? "text-gray-400" :
-                        job.status === "downloading" ? "text-blue-400" :
-                        "text-yellow-400"
+                    {job.title && (
+                      <p className="text-xs text-[#fbf0df]/50 font-mono truncate" title={job.url}>
+                        {job.url}
+                      </p>
+                    )}
+                    {!job.title && (
+                      <p className="text-xs text-[#fbf0df]/50 font-mono break-all">
+                        {job.url}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <span className={`text-xs font-semibold px-2 py-0.5 rounded ${
+                        job.status === "completed" ? "bg-green-500/20 text-green-400" :
+                        job.status === "failed" ? "bg-red-500/20 text-red-400" :
+                        job.status === "cancelled" ? "bg-gray-500/20 text-gray-400" :
+                        job.status === "downloading" ? "bg-blue-500/20 text-blue-400" :
+                        "bg-yellow-500/20 text-yellow-400"
                       }`}>{job.status}</span>
-                      {job.progress.currentVideo && job.progress.totalVideos && (
-                        <span className="ml-2">
-                          Video {job.progress.currentVideo}/{job.progress.totalVideos}
+                      {isPlaylist && job.progress.currentVideo && job.progress.totalVideos && (
+                        <span className="text-xs text-[#fbf0df]/70 font-medium">
+                          📹 {job.progress.currentVideo}/{job.progress.totalVideos}
                         </span>
                       )}
-                    </p>
+                      {job.type === "playlist" && (
+                        <span className="text-xs text-purple-400/70 font-medium">
+                          📂 Playlist
+                        </span>
+                      )}
+                    </div>
                   </div>
                   {(job.status === "pending" || job.status === "downloading") && (
                     <button
                       onClick={() => cancelDownload(job.id)}
-                      className="text-xs bg-red-500/20 text-red-400 border border-red-400/20 px-3 py-1 rounded hover:bg-red-500/30"
+                      className="text-xs bg-red-500/20 text-red-400 border border-red-400/20 px-3 py-1 rounded hover:bg-red-500/30 flex-shrink-0"
                     >
                       Cancel
                     </button>
@@ -573,22 +630,46 @@ export function LinkFetch() {
                 
                 {/* Progress Bar */}
                 {job.status === "downloading" && (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
+                    {/* Current file being downloaded */}
                     {job.progress.currentFile && (
-                      <p className="text-xs text-[#fbf0df]/70 mb-1 truncate">
+                      <p className="text-xs text-[#fbf0df]/70 truncate" title={job.progress.currentFile}>
                         📝 {job.progress.currentFile}
                       </p>
                     )}
-                    <div className="w-full bg-[#1a1a1a] rounded-full h-2 overflow-hidden">
-                      <div
-                        className="bg-[#fbf0df] h-full transition-all duration-300"
-                        style={{ width: `${job.progress.percent}%` }}
-                      />
-                    </div>
-                    <div className="flex justify-between text-xs text-[#fbf0df]/60">
-                      <span>{job.progress.percent.toFixed(1)}%</span>
-                      {job.progress.speed && <span>{job.progress.speed}</span>}
-                      {job.progress.eta && <span>ETA: {job.progress.eta}</span>}
+                    
+                    {/* Total playlist progress if applicable */}
+                    {isPlaylist && job.progress.currentVideo && job.progress.totalVideos && (
+                      <div className="space-y-0.5">
+                        <div className="flex justify-between text-xs text-[#fbf0df]/50">
+                          <span>Total Progress</span>
+                          <span>{totalProgress.toFixed(1)}%</span>
+                        </div>
+                        <div className="w-full bg-[#1a1a1a] rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className="bg-purple-400 h-full transition-all duration-300"
+                            style={{ width: `${totalProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Current item progress */}
+                    <div className="space-y-0.5">
+                      <div className="flex justify-between text-xs text-[#fbf0df]/70">
+                        <span>{isPlaylist ? `Item ${job.progress.currentVideo || 1}` : 'Progress'}</span>
+                        <div className="flex gap-2">
+                          <span>{job.progress.percent.toFixed(1)}%</span>
+                          {job.progress.speed && <span>{job.progress.speed}</span>}
+                          {job.progress.eta && <span>ETA: {job.progress.eta}</span>}
+                        </div>
+                      </div>
+                      <div className="w-full bg-[#1a1a1a] rounded-full h-2 overflow-hidden">
+                        <div
+                          className="bg-[#fbf0df] h-full transition-all duration-300"
+                          style={{ width: `${job.progress.percent}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -614,7 +695,7 @@ export function LinkFetch() {
                   <p className="text-xs text-red-400 mt-2">{job.error}</p>
                 )}
               </div>
-            ))}
+            )})}
           </div>
         </div>
       )}

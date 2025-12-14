@@ -1,5 +1,6 @@
 import type { VideoMetadata, VideoFormat, FormatRecommendation } from "@/types";
 import { useState } from "react";
+import toast from "react-hot-toast";
 
 interface MetadataProps {
   metadata: VideoMetadata;
@@ -13,6 +14,7 @@ export function Metadata({ metadata, recommendation, onDownload }: MetadataProps
 
   const handleDownload = (formatId?: string) => {
     setIsDownloading(true);
+    toast.success(`Download request sent${formatId ? ` (format: ${formatId})` : ''}`, { duration: 3000 });
     onDownload(formatId);
     // Re-enable after 2 seconds to allow multiple downloads
     setTimeout(() => setIsDownloading(false), 2000);
