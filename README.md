@@ -2,6 +2,20 @@
 
 A modern web interface for yt-dlp with real-time download progress, playlist support, and custom naming options.
 
+## Screenshots
+
+![Main Interface](.github/screenshots/1.png)
+*Main interface with video metadata and format selection*
+
+![Playlist View](.github/screenshots/2.png)
+*Playlist selection with per-item format configuration*
+
+![Download Queue](.github/screenshots/3.png)
+*Real-time download progress with dual progress bars for playlists*
+
+![Format Details](.github/screenshots/4.png)
+*Detailed format information organized by codec and resolution*
+
 ## Features
 
 ✨ **Modern UI** - Clean, dark-themed interface with collapsible format groups  

@@ -695,7 +695,7 @@ export function LinkFetch() {
                       <a
                         key={idx}
                         href={`/api/files?file=${encodeURIComponent(file.split("/").slice(-2).join("/"))}`}
-                        download
+                        download={file.split("/").pop()}
                         className="block text-xs text-blue-400 hover:text-blue-300 underline truncate"
                       >
                         📥 {file.split("/").pop()}
