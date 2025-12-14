@@ -26,7 +26,7 @@ RUN apk add --no-cache \
     python3 \
     py3-pip \
     ffmpeg \
-    && pip3 install --no-cache-dir yt-dlp \
+    && pip3 install --break-system-packages --no-cache-dir yt-dlp \
     && rm -rf /root/.cache /tmp/*
 
 # Copy package files and install production dependencies only
