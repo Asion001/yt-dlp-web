@@ -92,7 +92,14 @@ export class DownloadQueueManager {
           return job && job.status === "pending";
         });
 
-        console.log(`Restored ${this.jobs.size} jobs from state file`);
+        // Add any pending jobs that weren't in the queue (e.g., were downloading when saved)
+        state.jobs.forEach((job) => {
+          if (job.status === "pending" && !this.queue.includes(job.id)) {
+            this.queue.push(job.id);
+          }
+        });
+
+        console.log(`Restored ${this.jobs.size} jobs from state file (${this.queue.length} in queue)`);
 
         // Resume processing
         this.processQueue();
