@@ -71,26 +71,40 @@ export function LinkFetch() {
       case "download-started":
         console.log("Download started:", message.payload.jobId);
         toast.success("Download started!");
-        // Replace temp job with real job ID
+        // Replace temp job with real job from server
         setDownloads((prev) => {
           const newMap = new Map(prev);
-          // Remove temp jobs and add the real one
+          // Remove temp jobs
           Array.from(newMap.keys()).forEach(key => {
             if (key.endsWith('_pending')) {
               newMap.delete(key);
             }
           });
-          newMap.set(message.payload.jobId, {
-            id: message.payload.jobId,
-            url: lastDownloadUrlRef.current,
-            type: "video",
-            status: "pending",
-            progress: {
-              percent: 0,
-            },
-            outputPath: "",
-            createdAt: new Date(),
-          });
+          // Add the real job with all details from server
+          if (message.payload.job) {
+            const job = message.payload.job;
+            newMap.set(message.payload.jobId, {
+              id: job.id,
+              url: job.url,
+              title: job.title,
+              type: job.type,
+              status: job.status,
+              progress: job.progress || { percent: 0 },
+              outputPath: "",
+              createdAt: job.createdAt ? new Date(job.createdAt) : new Date(),
+            });
+          } else {
+            // Fallback if job details not provided
+            newMap.set(message.payload.jobId, {
+              id: message.payload.jobId,
+              url: lastDownloadUrlRef.current,
+              type: "video",
+              status: "pending",
+              progress: { percent: 0 },
+              outputPath: "",
+              createdAt: new Date(),
+            });
+          }
           return newMap;
         });
         break;
@@ -268,7 +282,7 @@ export function LinkFetch() {
     // Create a temp job ID to show immediately in UI
     const tempJobId = `dl_${Date.now()}_pending`;
     const title = metadata.title;
-    
+
     setDownloads((prev) => {
       const newMap = new Map(prev);
       newMap.set(tempJobId, {

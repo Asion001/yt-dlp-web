@@ -112,10 +112,29 @@ async function handleDownloadRequest(ws: any, request: DownloadRequest) {
     const jobId = await downloadQueue.addDownload(request);
     downloadQueue.subscribeToJob(jobId, ws);
 
+    // Get the full job details to send to client
+    const job = downloadQueue.getJob(jobId);
+
     ws.send(
       JSON.stringify({
         type: "download-started",
-        payload: { jobId },
+        payload: {
+          jobId,
+          job: job
+            ? {
+                id: job.id,
+                url: job.url,
+                title: job.title,
+                type: job.type,
+                status: job.status,
+                progress: job.progress,
+                createdAt:
+                  job.createdAt instanceof Date
+                    ? job.createdAt.toISOString()
+                    : job.createdAt,
+              }
+            : undefined,
+        },
       })
     );
   } catch (error) {
